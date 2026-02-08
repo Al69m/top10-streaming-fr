@@ -17,8 +17,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: npm install axios
+      - - name: Install dependencies
+  run: |
+    npm install axios
+    npm install stremio-addon-sdk
+    npm install node-fetch
 
       - name: Run scraper
         env:
