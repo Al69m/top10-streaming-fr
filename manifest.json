@@ -1,0 +1,28 @@
+{
+  "id": "top10.streaming.fr",
+  "name": "Top 10 Streaming FR",
+  "version": "1.0.0",
+  "description": "Top 10 quotidien des plateformes (Netflix, Prime, Disney+, Max, Paramount+, AppleTV+) basé sur FlixPatrol.",
+  "types": ["movie", "series"],
+  "catalogs": [
+    { "type": "movie", "id": "netflix-movies-top10", "name": "Netflix Top 10 - Films" },
+    { "type": "series", "id": "netflix-series-top10", "name": "Netflix Top 10 - Séries" },
+
+    { "type": "movie", "id": "prime-movies-top10", "name": "Prime Video Top 10 - Films" },
+    { "type": "series", "id": "prime-series-top10", "name": "Prime Video Top 10 - Séries" },
+
+    { "type": "movie", "id": "disney-movies-top10", "name": "Disney+ Top 10 - Films" },
+    { "type": "series", "id": "disney-series-top10", "name": "Disney+ Top 10 - Séries" },
+
+    { "type": "movie", "id": "max-movies-top10", "name": "Max Top 10 - Films" },
+    { "type": "series", "id": "max-series-top10", "name": "Max Top 10 - Séries" },
+
+    { "type": "movie", "id": "paramount-movies-top10", "name": "Paramount+ Top 10 - Films" },
+    { "type": "series", "id": "paramount-series-top10", "name": "Paramount+ Top 10 - Séries" },
+
+    { "type": "movie", "id": "apple-movies-top10", "name": "Apple TV+ Top 10 - Films" },
+    { "type": "series", "id": "apple-series-top10", "name": "Apple TV+ Top 10 - Séries" }
+  ],
+  "resources": ["catalog"],
+  "idPrefixes": ["tt"]
+}
