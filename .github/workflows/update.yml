@@ -2,38 +2,31 @@ name: Update Top 10
 
 on:
   schedule:
-    - cron: "0 5 * * *"   # Mise à jour tous les jours à 5h du matin (heure FR)
-  workflow_dispatch:       # Permet de lancer manuellement
+    - cron: "0 5 * * *"   # Mise à jour tous les jours à 5h du matin
+  workflow_dispatch:      # Permet de lancer manuellement
 
 jobs:
   update:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
+    - name: Install dependencies
+      run: |
+        npm install node-fetch@2
 
-      - name: Install dependencies
-        run: |
-          npm install axios
-          npm install stremio-addon-sdk
-          npm install node-fetch@2
+    - name: Run scraper
+      env:
+        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        RPDB_API_KEY: ${{ secrets.RPDB_API_KEY }}
+      run: node scraper.js
 
-      - name: Run scraper
-        env:
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-          RPDB_API_KEY: ${{ secrets.RPDB_API_KEY }}
-        run: node index.js
-
-      - name: Commit updated JSON
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/*.json
-          git commit -m "Auto-update Top10" || echo "No changes to commit"
-          git push
+    - name: Commit updated JSON
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add data/*.json
+        git commit -m "Updated JSON files" || echo "No changes to commit"
+        git push
