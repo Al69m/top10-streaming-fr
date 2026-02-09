@@ -13,16 +13,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        npm install node-fetch@2
-
-    - name: Run scraper
-      env:
-        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-        RPDB_API_KEY: ${{ secrets.RPDB_API_KEY }}
-      run: node scraper.js
-
     - name: Commit updated JSON
       run: |
         git config user.name "github-actions[bot]"
