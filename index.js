@@ -1,159 +1,108 @@
-// ==============================
-//  Top 10 Streaming FR Scraper
-//  FlixPatrol → TMDB → RPDB
-//  Génération JSON Stremio
-// ==============================
+import express from "express";
+import fetch from "node-fetch";
+import { addonBuilder } from "stremio-addon-sdk";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const fs = require("fs");
-const axios = require("axios");
+// === CONFIG ===
+const TMDB_KEY = process.env.TMDB_KEY;
+const RPDB_KEY = process.env.RPDB_KEY;
+const REPO = "Al69m/top10-streaming-fr";  // <<< IMPORTANT
 
-// ---------- CONFIG ----------
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
-const RPDB_API_KEY = process.env.RPDB_API_KEY;
+// === INIT ===
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const app = express();
+const builder = new addonBuilder({
+	id: "top10.streaming.fr",
+	version: "1.0.0",
+	name: "Top 10 Streaming FR",
+	description: "Top 10 quotidien provenant de FlixPatrol — Netflix, Prime, Disney, HBO, Apple, Paramount.",
+	catalogs: [
+		{ type: "movie", id: "netflix-movies", name: "Netflix Top Films" },
+		{ type: "series", id: "netflix-series", name: "Netflix Top Séries" },
 
-const PLATFORMS = [
-    "netflix",
-    "prime",
-    "disney",
-    "hbo",
-    "paramount",
-    "apple"
-];
+		{ type: "movie", id: "prime-movies", name: "Prime Video Top Films" },
+		{ type: "series", id: "prime-series", name: "Prime Video Top Séries" },
 
-// FlixPatrol base URL
-const FLIX_URL = "https://flixpatrol.com/top10/streaming/france/";
+		{ type: "movie", id: "disney-movies", name: "Disney+ Top Films" },
+		{ type: "series", id: "disney-series", name: "Disney+ Top Séries" },
 
-// Create directory if needed
-if (!fs.existsSync("data")) {
-    fs.mkdirSync("data");
+		{ type: "movie", id: "hbo-movies", name: "HBO Max Top Films" },
+		{ type: "series", id: "hbo-series", name: "HBO Max Top Séries" },
+
+		{ type: "movie", id: "apple-movies", name: "Apple TV+ Top Films" },
+		{ type: "series", id: "apple-series", name: "Apple TV+ Top Séries" },
+
+		{ type: "movie", id: "paramount-movies", name: "Paramount+ Top Films" },
+		{ type: "series", id: "paramount-series", name: "Paramount+ Top Séries" },
+	]
+});
+
+// === FUNCTION → Load JSON raw from GitHub ===
+async function loadJSON(file) {
+	const url = `https://raw.githubusercontent.com/${REPO}/main/data/${file}.json`;
+	const res = await fetch(url);
+
+	if (!res.ok) {
+		console.log("JSON introuvable :", url);
+		return [];
+	}
+
+	return res.json();
 }
 
+// === FUNCTION → Convert JSON into Stremio meta item ===
+async function convertItem(item) {
+	const tmdbUrl = `https://api.themoviedb.org/3/${item.type}/${item.tmdb}?api_key=${TMDB_KEY}&language=fr-FR`;
+	const tmdbRes = await fetch(tmdbUrl);
+	const tmdb = tmdbRes.ok ? await tmdbRes.json() : null;
 
-// -----------------------------------------
-// Fetch FlixPatrol Top 10 for each platform
-// -----------------------------------------
-async function fetchFlixTop(platform, category) {
-    const url = `${FLIX_URL}?platform=${platform}&type=${category}`;
+	let poster = null;
+	if (tmdb && tmdb.poster_path)
+		poster = `https://image.tmdb.org/t/p/w500${tmdb.poster_path}`;
 
-    try {
-        const res = await axios.get(url);
-        const html = res.data;
+	// === RPDB (notes) ===
+	let rpdb = null;
+	try {
+		const rpdbUrl = `https://api.ratingposterdb.com/${RPDB_KEY}/${item.tmdb}`;
+		const r = await fetch(rpdbUrl);
+		rpdb = r.ok ? await r.json() : null;
+	} catch (e) {}
 
-        // Extract titles using simple regex
-        const matches = [...html.matchAll(/class="title">([^<]+)<\/a>/g)];
+	let description = tmdb && tmdb.overview ? tmdb.overview : "";
 
-        return matches.slice(0, 10).map(m => m[1]);
-    } catch (err) {
-        console.error("Error scraping FlixPatrol:", platform, category, err);
-        return [];
-    }
+	// add RPDB ratings if available
+	if (rpdb) {
+		description =
+			`⭐ IMDB: ${rpdb.imdb_rating}\n🍅 Rotten: ${rpdb.rt_score}%\n🟩 Meta: ${rpdb.meta_score}%\n\n` +
+			description;
+	}
+
+	return {
+		id: item.tmdb.toString(),
+		type: item.type,
+		name: tmdb ? (tmdb.title || tmdb.name) : item.title,
+		poster: poster,
+		description: description
+	};
 }
 
+// === CATALOG HANDLER ===
+builder.defineCatalogHandler(async ({ id }) => {
+	const data = await loadJSON(id);
 
-// -----------------------------------------
-// TMDB Search (Poster, Overview, IDs)
-// -----------------------------------------
-async function tmdbSearch(title, isMovie) {
-    const type = isMovie ? "movie" : "tv";
-    try {
-        const url = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&language=fr-FR&query=${encodeURIComponent(title)}`;
-        const res = await axios.get(url);
+	const items = await Promise.all(
+		data.map(async item => convertItem(item))
+	);
 
-        if (!res.data.results.length) return null;
+	return { metas: items };
+});
 
-        const item = res.data.results[0];
+// === ADDON HTTP SERVER ===
+const addonInterface = builder.getInterface();
+app.get("/manifest.json", (_, res) => res.json(addonInterface.manifest));
+app.get("/:resource/:type/:id", addonInterface.get);
+app.get("/", (_, res) => res.send("Top 10 Streaming FR — Addon actif."));
 
-        return {
-            id: item.id,
-            title: item.title || item.name,
-            overview: item.overview,
-            poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
-            year: (item.release_date || item.first_air_date || "").split("-")[0],
-            type
-        };
-
-    } catch (err) {
-        console.error("TMDB search error:", title);
-        return null;
-    }
-}
-
-
-// -----------------------------------------
-// RPDB Ratings
-// -----------------------------------------
-async function fetchRPDBRating(title) {
-    try {
-        const url = `https://api.ratingposterdb.com/${RPDB_API_KEY}/search?term=${encodeURIComponent(title)}`;
-        const res = await axios.get(url);
-
-        if (!res.data.length) return null;
-
-        const item = res.data[0];
-
-        return {
-            imdb: item.imdb_rating || null,
-            tomato: item.rt_rating || null,
-            meta: item.meta_rating || null
-        };
-
-    } catch (err) {
-        console.error("RPDB error:", title);
-        return null;
-    }
-}
-
-
-// -----------------------------------------
-// Build full metadata for each title
-// -----------------------------------------
-async function buildItem(title, isMovie) {
-    const tmdb = await tmdbSearch(title, isMovie);
-    if (!tmdb) return null;
-
-    const rating = await fetchRPDBRating(title);
-
-    return {
-        id: tmdb.id,
-        name: tmdb.title,
-        poster: tmdb.poster,
-        overview: tmdb.overview,
-        year: tmdb.year,
-        type: tmdb.type,
-        rating
-    };
-}
-
-
-// -----------------------------------------
-// Main scraping loop
-// -----------------------------------------
-async function run() {
-    console.log("Scraping Top 10 FR...");
-
-    for (const platform of PLATFORMS) {
-        console.log(`→ PLATFORM: ${platform}`);
-
-        // Movies
-        const movieTitles = await fetchFlixTop(platform, "movies");
-        const movieData = [];
-        for (const t of movieTitles) {
-            const item = await buildItem(t, true);
-            if (item) movieData.push(item);
-        }
-        fs.writeFileSync(`data/${platform}-movies.json`, JSON.stringify(movieData, null, 2));
-
-        // Series
-        const seriesTitles = await fetchFlixTop(platform, "series");
-        const seriesData = [];
-        for (const t of seriesTitles) {
-            const item = await buildItem(t, false);
-            if (item) seriesData.push(item);
-        }
-        fs.writeFileSync(`data/${platform}-series.json`, JSON.stringify(seriesData, null, 2));
-    }
-
-    console.log("✔ DONE — JSON files updated.");
-}
-
-run();
+app.listen(7000, () => console.log("Addon prêt sur le port 7000"));
